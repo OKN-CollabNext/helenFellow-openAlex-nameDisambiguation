@@ -18,7 +18,6 @@ params = "per-page=200&select=id,display_name,orcid,works_count,affiliations,x_c
 headers = {"User-Agent": "MyApp/1.0 (rlee379@gatech.edu)"}
 
 # Function to get co-authors
-
 def get_coauthors(author_id, name):
     works_url = f"https://api.openalex.org/works?filter=author.id:{author_id}&per-page=200&api_key={my_api_key}"
     coauthors = set()
@@ -32,8 +31,10 @@ def get_coauthors(author_id, name):
                     coauthor_name = authorship.get("author", {}).get("display_name")
                     if coauthor_name and coauthor_name != name:
                         coauthors.add(coauthor_name)
+        else:
+            print(f"Error fetching coauthors for {name} ({author_id}): {response.status_code}")
     except Exception as e:
-        print(f"Error fetching coauthors: {e}")
+        print(f"Exception while fetching coauthors for {name}: {e}")
 
     return ", ".join(coauthors) if coauthors else "N/A"
 
@@ -63,26 +64,38 @@ while cursor:
         for author in results:
             author_id = author.get("id")
             name = author.get("display_name", "Unknown")
+
+            # Handle ORCID safely
             orcid = author.get("orcid")
-            
             orcid = orcid.split("/")[-1] if orcid else "N/A"
-            institutions = ", ".join(set([affiliation['institution']['display_name'] for affiliation in author.get("affiliations", [])]))
+
+            # Extract institutions and concepts
+            institutions = ", ".join(set([affiliation['institution']['display_name'] for affiliation in author.get("affiliations", []) if 'institution' in affiliation]))
             concepts = ", ".join(set([concept['display_name'] for concept in author.get("x_concepts", [])]))
 
+            # Submit coauthor fetching tasks
             futures.append(executor.submit(get_coauthors, author_id, name))
 
-        for future, author in zip(futures, results):
+            # Store data while awaiting coauthor results
             rows.append({
-                'Name': author.get("display_name", "Unknown"),
-                'Orcid': author.get("orcid", "N/A").split("/")[-1],
+                'Name': name,
+                'Orcid': orcid,
                 'Institutions': institutions,
                 'Concepts': concepts,
-                'Coauthors': future.result()
+                'Coauthors': None  # Placeholder for coauthors, will be updated
             })
 
-    cursor = data['meta'].get('next_cursor', False)
+        # Collect coauthor results
+        for i, future in enumerate(futures):
+            rows[i]['Coauthors'] = future.result()
+
+    # Get next cursor
+    cursor = data['meta'].get('next_cursor', None)
+    if not cursor:
+        break
 
 # Save data
 print(f"Retrieved {len(rows)} authors")
 df = pd.DataFrame(rows)
 df.to_csv('all_authors_data.csv', index=False)
+print("Data saved successfully.")

@@ -63,7 +63,9 @@ while cursor:
         for author in results:
             author_id = author.get("id")
             name = author.get("display_name", "Unknown")
-            orcid = author.get("orcid", "N/A").split("/")[-1]
+            orcid = author.get("orcid")
+            
+            orcid = orcid.split("/")[-1] if orcid else "N/A"
             institutions = ", ".join(set([affiliation['institution']['display_name'] for affiliation in author.get("affiliations", [])]))
             concepts = ", ".join(set([concept['display_name'] for concept in author.get("x_concepts", [])]))
 

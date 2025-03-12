@@ -1,4 +1,25 @@
-import csv
+import requests
+import pandas as pd
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv('.env')
+my_api_key = os.getenv('API_KEY')
+if my_api_key is None:
+    print("No API key found!!!")
+    exit()
+else:
+    print("API key is set!")
+
+# Base URL for OpenAlex API authors endpoint
+base_url = "https://api.openalex.org/authors"
+
+# Parameters for pagination and selecting data
+params = "per-page=200&select=id,display_name,orcid,works_count,affiliations,x_concepts"
+
+# Headers with User-Agent
+headers = {"User-Agent": "MyApp/1.0 (rlee379@gatech.edu)"}
 
 # List to hold data for DataFrame
 rows = []
@@ -60,19 +81,20 @@ while cursor and current_count < end_entry:
 
         rows.append({
             'Name': name,
-            'ORCID': orcid,
+            'Orcid': orcid,
             'Institutions': institutions_str,
             'Concepts': concepts_str,
             'Coauthors': coauthors_str
         })
         current_count += 1
 
-    cursor = data.get("meta", {}).get("next_cursor")  # Set cursor for next request if available
+    cursor = data['meta'].get('next_cursor', False)  # Ensure cursor updates
 
-# Write the collected data to a CSV file
-with open('authors_data.csv', 'w', newline='', encoding='utf-8') as file:
-    writer = csv.DictWriter(file, fieldnames=['Name', 'ORCID', 'Institutions', 'Concepts', 'Coauthors'])
-    writer.writeheader()  # Write the header row
-    writer.writerows(rows)  # Write all the collected rows
+# Create DataFrame
+df = pd.DataFrame(rows)
 
-print("Data saved to 'authors_data.csv'")
+# Save DataFrame to CSV
+df.to_csv('filtered_authors_data.csv', index=False)
+
+# Display the DataFrame
+print(df)
